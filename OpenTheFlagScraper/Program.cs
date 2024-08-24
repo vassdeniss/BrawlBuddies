@@ -75,8 +75,11 @@ async Task GetCardDataAsync(string url)
         string imgSrc = imgNode.GetAttributeValue("src", string.Empty);
         await DownloadImageAsync(imgSrc.Replace("/thumbs", string.Empty), Path.Combine(imagesFolder, $"{id}.png"));
 
+        Console.WriteLine("Gathering stats...");
+
         HtmlNode? worldNode = document.DocumentNode.SelectSingleNode("//div[@class='card-worlds']//a[@title]");
         string? cardName = GetInfo(document, "//h1");
+        string? attributes = GetAttribtes(document, "//div[@class='card-attributes']//a");
         string? power = GetInfo(document, "//li[@class='card-power']/a");
         string? critical = GetInfo(document, "//li[@class='card-critical']/a");
         string? defence = GetInfo(document, "//li[@class='card-defense']/a");
@@ -88,9 +91,10 @@ async Task GetCardDataAsync(string url)
             Name = cardName,
             ImageName = $"{id}.png",
             World = worldNode?.GetAttributeValue("title", string.Empty),
-            Power = power,
-            Critical = critical,
-            Defence = defence,
+            Attributes = attributes,
+            Power = int.TryParse(power, out int powerValue) ? powerValue : null,
+            Critical = int.TryParse(critical, out int criticalValue) ? criticalValue : null,
+            Defence = int.TryParse(defence, out int defenceValue) ? defenceValue : null,
             Size = size,
             Type = type,
         };
@@ -108,7 +112,24 @@ string? GetInfo(HtmlDocument doc, string xpath)
 {
     HtmlNode node = doc.DocumentNode.SelectSingleNode(xpath);
     return node?.InnerText.Trim();
-} 
+}
+
+string? GetAttribtes(HtmlDocument doc, string xpath)
+{
+    HtmlNodeCollection nodes = doc.DocumentNode.SelectNodes(xpath);
+    if (nodes is null)
+    {
+        return null;
+    }
+
+    List<string> attributes = new();
+    foreach (HtmlNode node in nodes)
+    {
+        attributes.Add(node.InnerText.Trim());
+    }
+
+    return string.Join(" / ", attributes);
+}
 
 string ExtractIdFromUrl(string url)
 {
