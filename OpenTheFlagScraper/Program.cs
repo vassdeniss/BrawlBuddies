@@ -1,12 +1,23 @@
 ﻿using HtmlAgilityPack;
 
+using Newtonsoft.Json;
+
+using OpenTheFlagScraper;
+
 using System.Text.RegularExpressions;
 
 string projectDirectory = Directory.GetCurrentDirectory();
 string imagesFolder = Path.Combine(projectDirectory, "images");
 Directory.CreateDirectory(imagesFolder);
 
+List<Card> cards = new();
+
 await GetCardsLinksFromEveryPageAsync();
+
+string json = JsonConvert.SerializeObject(cards, Formatting.Indented);
+File.WriteAllText(Path.Combine(projectDirectory, "cards.json"), json);
+
+Console.WriteLine("Cards information has been successfully written to the JSON file.");
 
 async Task GetCardsLinksFromEveryPageAsync()
 {
@@ -31,7 +42,8 @@ async Task GetCardsLinksFromEveryPageAsync()
             foreach (HtmlNode anchor in anchorTags)
             {
                 string hrefValue = anchor.GetAttributeValue("href", string.Empty);
-                await GetImagesTODO(hrefValue);
+                await GetCardDataAsync(hrefValue);
+                Console.WriteLine();
             }
         }
         catch (HttpRequestException e)
@@ -41,7 +53,7 @@ async Task GetCardsLinksFromEveryPageAsync()
     }
 }
 
-async Task GetImagesTODO(string url)
+async Task GetCardDataAsync(string url)
 {
     string id = ExtractIdFromUrl(url);
 
@@ -58,23 +70,45 @@ async Task GetImagesTODO(string url)
         HtmlDocument document = new();
         document.LoadHtml(html);
 
+        // Extract the card name
         HtmlNode imgNode = document.DocumentNode.SelectSingleNode("//div[@class='card-image']//img");
         string imgSrc = imgNode.GetAttributeValue("src", string.Empty);
-
         await DownloadImageAsync(imgSrc.Replace("/thumbs", string.Empty), Path.Combine(imagesFolder, $"{id}.png"));
 
-        HtmlNode? titleNode = document.DocumentNode.SelectSingleNode("//div[@class='card-worlds']//a[@title]");
-        if (titleNode is not null)
+        HtmlNode? worldNode = document.DocumentNode.SelectSingleNode("//div[@class='card-worlds']//a[@title]");
+        string? cardName = GetInfo(document, "//h1");
+        string? power = GetInfo(document, "//li[@class='card-power']/a");
+        string? critical = GetInfo(document, "//li[@class='card-critical']/a");
+        string? defence = GetInfo(document, "//li[@class='card-defense']/a");
+        string? size = GetInfo(document, "//li[@class='card-size']/a");
+        string? type = GetInfo(document, "//li[@class='card-type']/a");
+
+        Card card = new()
         {
-            Console.WriteLine("World: " + titleNode.GetAttributeValue("title", string.Empty));
-        }
-        
+            Name = cardName,
+            ImageName = $"{id}.png",
+            World = worldNode?.GetAttributeValue("title", string.Empty),
+            Power = power,
+            Critical = critical,
+            Defence = defence,
+            Size = size,
+            Type = type,
+        };
+
+        cards.Add(card);
+        Console.WriteLine("Stats extracted and saved");
     }
     catch (HttpRequestException e)
     {
         Console.WriteLine($"Request error: {e.Message}");
     }
 }
+
+string? GetInfo(HtmlDocument doc, string xpath)
+{
+    HtmlNode node = doc.DocumentNode.SelectSingleNode(xpath);
+    return node?.InnerText.Trim();
+} 
 
 string ExtractIdFromUrl(string url)
 {
